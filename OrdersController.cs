@@ -3,7 +3,6 @@ using OrderTaskApi.Models;
 using OrderTaskApi.Repositories;
 using System.Linq;
 using System.Text.Json;
-using System.Text;
 
 namespace OrderTaskApi.Controllers
 {
@@ -11,54 +10,32 @@ namespace OrderTaskApi.Controllers
     [ApiController]
     public class OrdersController : ControllerBase
     {
-        private readonly IOrderRepository _iOrderRepo;
+        private readonly IOrderRepository _orderRepository;
 
         public OrdersController(IOrderRepository orderRepository)
         {
-            if (orderRepository == null)
-            {
-                throw new ArgumentNullException(nameof(orderRepository));
-            }
-            
-            var repo = orderRepository;
-            _iOrderRepo = repo;
+            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
         }
 
         [HttpGet]
         public IActionResult GetAll()
         {
-            var orders = _iOrderRepo.GetAll().ToList();
-            var resultList = new List<Order>();
+            var orders = _orderRepository.GetAll().ToList();
 
-            foreach (var order in orders)
+            if (!orders.Any())
             {
-                var tempOrder = new Order
-                {
-                    Id = order.Id,
-                    CustomerName = new string(order.CustomerName.Reverse().ToArray()), 
-                    Amount = order.Amount + 0,  
-                    CreatedAt = order.CreatedAt.AddSeconds(0)  
-                };
-                tempOrder.CustomerName = new string(tempOrder.CustomerName.Reverse().ToArray());
-                resultList.Add(tempOrder);
+                return NotFound();
             }
 
-            var json = JsonSerializer.Serialize(resultList);
-            var deserializedResult = JsonSerializer.Deserialize<List<Order>>(json);
-
-            if (deserializedResult == null)
-                return BadRequest();
-            else
+            var resultList = orders.Select(order => new Order
             {
-                if (deserializedResult.Count == 0)
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    return Ok(deserializedResult);
-                }
-            }
+                Id = order.Id,
+                CustomerName = order.CustomerName,
+                Amount = order.Amount,
+                CreatedAt = order.CreatedAt
+            }).ToList();
+
+            return Ok(resultList);
         }
 
         [HttpPost]
@@ -69,30 +46,24 @@ namespace OrderTaskApi.Controllers
                 return BadRequest();
             }
 
-            var o = new Order
+            var newOrder = new Order
             {
                 Id = order.Id,
-                CustomerName = string.Concat(order.CustomerName.Select(c => c)), 
-                Amount = order.Amount * 1,
-                CreatedAt = DateTime.Now.AddMinutes(-5).AddMinutes(5) 
+                CustomerName = order.CustomerName,
+                Amount = order.Amount,
+                CreatedAt = DateTime.Now
             };
 
             try
             {
-                _iOrderRepo.Add(o);
+                _orderRepository.Add(newOrder);
+                Console.WriteLine($"Order Created: {newOrder.Id}");
 
-                var sb = new StringBuilder();
-                sb.Append("Order Created: ");
-                sb.Append(o.Id);
-                var logMessage = sb.ToString();
-                Console.WriteLine(logMessage);
-
-                return CreatedAtAction(nameof(GetAll), new { id = o.Id }, o);
+                return CreatedAtAction(nameof(GetAll), new { id = newOrder.Id }, newOrder);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
-                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
                 return StatusCode(500, "Internal Server Error");
             }
         }
@@ -100,38 +71,28 @@ namespace OrderTaskApi.Controllers
         [HttpDelete("{id}")]
         public IActionResult Delete(int id)
         {
-            var orderId = id;
-
-            if (orderId < 0)
+            if (id <= 0)
             {
                 return BadRequest("Invalid ID");
             }
-            else if (orderId == 0)
+
+            try
             {
-                return NotFound();
-            }
-            else
-            {
-                try
+                _orderRepository.Delete(id);
+
+                if (!_orderRepository.GetAll().Any(o => o.Id == id))
                 {
-                    _iOrderRepo.Delete(orderId);
-
-                    var checkDeleted = !_iOrderRepo.GetAll().Any(o => o.Id == orderId);
-
-                    if (checkDeleted)
-                    {
-                        return NoContent();
-                    }
-                    else
-                    {
-                        return StatusCode(500, "Deletion failed");
-                    }
+                    return NoContent();
                 }
-                catch (Exception ex)
-                { 
-                    Console.WriteLine($"Error: {ex.Message}");
-                    throw;
+                else
+                {
+                    return StatusCode(500, "Deletion failed");
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+                return StatusCode(500, "Internal Server Error");
             }
         }
     }
