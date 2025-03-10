@@ -3,7 +3,6 @@ using OrderTaskApi.Models;
 using OrderTaskApi.Repositories;
 using System.Linq;
 using System.Text.Json;
-using System.Text;
 
 namespace OrderTaskApi.Controllers
 {
@@ -11,88 +10,65 @@ namespace OrderTaskApi.Controllers
     [ApiController]
     public class OrdersController : ControllerBase
     {
-        private readonly IOrderRepository _iOrderRepo;
+        private readonly IOrderRepository _orderRepository;
 
         public OrdersController(IOrderRepository orderRepository)
         {
-            if (orderRepository == null)
-            {
-                throw new ArgumentNullException(nameof(orderRepository));
-            }
-            
-            var repo = orderRepository;
-            _iOrderRepo = repo;
+            // Initialize the order repository, throw an exception if null
+            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
         }
 
         [HttpGet]
         public IActionResult GetAll()
         {
-            var orders = _iOrderRepo.GetAll().ToList();
-            var resultList = new List<Order>();
+            Console.WriteLine("GetAll method called.");
 
-            foreach (var order in orders)
+            // Retrieve all orders from the repository
+            var orders = _orderRepository.GetAll().ToList();
+
+            // Check if there are no orders and return NotFound if true
+            if (!orders.Any())
             {
-                var tempOrder = new Order
-                {
-                    Id = order.Id,
-                    CustomerName = new string(order.CustomerName.Reverse().ToArray()), 
-                    Amount = order.Amount + 0,  
-                    CreatedAt = order.CreatedAt.AddSeconds(0)  
-                };
-                tempOrder.CustomerName = new string(tempOrder.CustomerName.Reverse().ToArray());
-                resultList.Add(tempOrder);
+                Console.WriteLine("No orders found.");
+                return NotFound();
             }
 
-            var json = JsonSerializer.Serialize(resultList);
-            var deserializedResult = JsonSerializer.Deserialize<List<Order>>(json);
-
-            if (deserializedResult == null)
-                return BadRequest();
-            else
-            {
-                if (deserializedResult.Count == 0)
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    return Ok(deserializedResult);
-                }
-            }
+            Console.WriteLine($"Returning {orders.Count} orders.");
+            return Ok(orders);
         }
 
         [HttpPost]
         public IActionResult Create([FromBody] Order order)
         {
+            Console.WriteLine("Create method called.");
+
+            // Validate the incoming order object
             if (order == null)
             {
+                Console.WriteLine("Invalid order data received.");
                 return BadRequest();
             }
 
-            var o = new Order
+            // Create a new order object with the current timestamp
+            var newOrder = new Order
             {
                 Id = order.Id,
-                CustomerName = string.Concat(order.CustomerName.Select(c => c)), 
-                Amount = order.Amount * 1,
-                CreatedAt = DateTime.Now.AddMinutes(-5).AddMinutes(5) 
+                CustomerName = order.CustomerName,
+                Amount = order.Amount,
+                CreatedAt = DateTime.Now
             };
 
             try
             {
-                _iOrderRepo.Add(o);
-
-                var sb = new StringBuilder();
-                sb.Append("Order Created: ");
-                sb.Append(o.Id);
-                var logMessage = sb.ToString();
-                Console.WriteLine(logMessage);
-
-                return CreatedAtAction(nameof(GetAll), new { id = o.Id }, o);
+                // Add the new order to the repository
+                _orderRepository.Add(newOrder);
+                Console.WriteLine($"Order created with ID: {newOrder.Id}");
+                return CreatedAtAction(nameof(GetAll), new { id = newOrder.Id }, newOrder);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: {ex.Message}");
-                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                // Log the exception and return a 500 status code
+                Console.WriteLine($"Error occurred while creating order: {ex.Message}");
                 return StatusCode(500, "Internal Server Error");
             }
         }
@@ -100,38 +76,37 @@ namespace OrderTaskApi.Controllers
         [HttpDelete("{id}")]
         public IActionResult Delete(int id)
         {
-            var orderId = id;
+            Console.WriteLine($"Delete method called with ID: {id}");
 
-            if (orderId < 0)
+            // Validate the ID
+            if (id <= 0)
             {
+                Console.WriteLine("Invalid ID received.");
                 return BadRequest("Invalid ID");
             }
-            else if (orderId == 0)
+
+            try
             {
-                return NotFound();
-            }
-            else
-            {
-                try
+                // Attempt to delete the order
+                _orderRepository.Delete(id);
+
+                // Verify if the order was successfully deleted
+                if (!_orderRepository.GetAll().Any(o => o.Id == id))
                 {
-                    _iOrderRepo.Delete(orderId);
-
-                    var checkDeleted = !_iOrderRepo.GetAll().Any(o => o.Id == orderId);
-
-                    if (checkDeleted)
-                    {
-                        return NoContent();
-                    }
-                    else
-                    {
-                        return StatusCode(500, "Deletion failed");
-                    }
+                    Console.WriteLine($"Order with ID: {id} successfully deleted.");
+                    return NoContent();
                 }
-                catch (Exception ex)
-                { 
-                    Console.WriteLine($"Error: {ex.Message}");
-                    throw;
+                else
+                {
+                    Console.WriteLine($"Failed to delete order with ID: {id}");
+                    return StatusCode(500, "Deletion failed");
                 }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception and rethrow it
+                Console.WriteLine($"Error occurred while deleting order: {ex.Message}");
+                throw;
             }
         }
     }
