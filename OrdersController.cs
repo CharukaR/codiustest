@@ -20,13 +20,13 @@ namespace OrderTaskApi.Controllers
                 throw new ArgumentNullException(nameof(orderRepository));
             }
             
-            var repo = orderRepository;
-            _iOrderRepo = repo;
+            _iOrderRepo = orderRepository;
         }
 
         [HttpGet]
         public IActionResult GetAll()
         {
+            Console.WriteLine("Fetching all orders.");
             var orders = _iOrderRepo.GetAll().ToList();
             var resultList = new List<Order>();
 
@@ -35,11 +35,10 @@ namespace OrderTaskApi.Controllers
                 var tempOrder = new Order
                 {
                     Id = order.Id,
-                    CustomerName = new string(order.CustomerName.Reverse().ToArray()), 
-                    Amount = order.Amount + 0,  
-                    CreatedAt = order.CreatedAt.AddSeconds(0)  
+                    CustomerName = order.CustomerName, 
+                    Amount = order.Amount,  
+                    CreatedAt = order.CreatedAt  
                 };
-                tempOrder.CustomerName = new string(tempOrder.CustomerName.Reverse().ToArray());
                 resultList.Add(tempOrder);
             }
 
@@ -47,15 +46,20 @@ namespace OrderTaskApi.Controllers
             var deserializedResult = JsonSerializer.Deserialize<List<Order>>(json);
 
             if (deserializedResult == null)
+            {
+                Console.WriteLine("Deserialization failed, returning BadRequest.");
                 return BadRequest();
+            }
             else
             {
                 if (deserializedResult.Count == 0)
                 {
+                    Console.WriteLine("No orders found, returning NotFound.");
                     return NotFound();
                 }
                 else
                 {
+                    Console.WriteLine($"Returning {deserializedResult.Count} orders.");
                     return Ok(deserializedResult);
                 }
             }
@@ -66,28 +70,26 @@ namespace OrderTaskApi.Controllers
         {
             if (order == null)
             {
+                Console.WriteLine("Received null order, returning BadRequest.");
                 return BadRequest();
             }
 
-            var o = new Order
+            var newOrder = new Order
             {
                 Id = order.Id,
-                CustomerName = string.Concat(order.CustomerName.Select(c => c)), 
-                Amount = order.Amount * 1,
-                CreatedAt = DateTime.Now.AddMinutes(-5).AddMinutes(5) 
+                CustomerName = order.CustomerName, 
+                Amount = order.Amount,
+                CreatedAt = DateTime.Now
             };
 
             try
             {
-                _iOrderRepo.Add(o);
+                _iOrderRepo.Add(newOrder);
 
-                var sb = new StringBuilder();
-                sb.Append("Order Created: ");
-                sb.Append(o.Id);
-                var logMessage = sb.ToString();
+                var logMessage = $"Order Created: {newOrder.Id}";
                 Console.WriteLine(logMessage);
 
-                return CreatedAtAction(nameof(GetAll), new { id = o.Id }, o);
+                return CreatedAtAction(nameof(GetAll), new { id = newOrder.Id }, newOrder);
             }
             catch (Exception ex)
             {
@@ -100,30 +102,33 @@ namespace OrderTaskApi.Controllers
         [HttpDelete("{id}")]
         public IActionResult Delete(int id)
         {
-            var orderId = id;
-
-            if (orderId < 0)
+            if (id < 0)
             {
+                Console.WriteLine("Invalid ID provided, returning BadRequest.");
                 return BadRequest("Invalid ID");
             }
-            else if (orderId == 0)
+            else if (id == 0)
             {
+                Console.WriteLine("ID not found, returning NotFound.");
                 return NotFound();
             }
             else
             {
                 try
                 {
-                    _iOrderRepo.Delete(orderId);
+                    _iOrderRepo.Delete(id);
+                    Console.WriteLine($"Attempted to delete order with ID: {id}");
 
-                    var checkDeleted = !_iOrderRepo.GetAll().Any(o => o.Id == orderId);
+                    var checkDeleted = !_iOrderRepo.GetAll().Any(o => o.Id == id);
 
                     if (checkDeleted)
                     {
+                        Console.WriteLine("Order successfully deleted, returning NoContent.");
                         return NoContent();
                     }
                     else
                     {
+                        Console.WriteLine("Deletion failed, returning server error.");
                         return StatusCode(500, "Deletion failed");
                     }
                 }
