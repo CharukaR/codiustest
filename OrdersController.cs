@@ -26,6 +26,7 @@ namespace OrderTaskApi.Controllers
         [HttpGet]
         public IActionResult GetAll()
         {
+            Console.WriteLine("Fetching all orders from repository.");
             var orders = _iOrderRepo.GetAll().ToList();
             var resultList = new List<Order>();
 
@@ -45,15 +46,20 @@ namespace OrderTaskApi.Controllers
             var deserializedResult = JsonSerializer.Deserialize<List<Order>>(json);
 
             if (deserializedResult == null)
+            {
+                Console.WriteLine("Deserialization failed, returning BadRequest.");
                 return BadRequest();
+            }
             else
             {
                 if (deserializedResult.Count == 0)
                 {
+                    Console.WriteLine("No orders found, returning NotFound.");
                     return NotFound();
                 }
                 else
                 {
+                    Console.WriteLine($"Returning {deserializedResult.Count} orders.");
                     return Ok(deserializedResult);
                 }
             }
@@ -64,6 +70,7 @@ namespace OrderTaskApi.Controllers
         {
             if (order == null)
             {
+                Console.WriteLine("Received null order, returning BadRequest.");
                 return BadRequest();
             }
 
@@ -97,10 +104,12 @@ namespace OrderTaskApi.Controllers
         {
             if (id < 0)
             {
+                Console.WriteLine("Invalid ID received, returning BadRequest.");
                 return BadRequest("Invalid ID");
             }
             else if (id == 0)
             {
+                Console.WriteLine("ID not found, returning NotFound.");
                 return NotFound();
             }
             else
@@ -113,10 +122,12 @@ namespace OrderTaskApi.Controllers
 
                     if (checkDeleted)
                     {
+                        Console.WriteLine($"Order with ID {id} successfully deleted.");
                         return NoContent();
                     }
                     else
                     {
+                        Console.WriteLine($"Deletion failed for order with ID {id}.");
                         return StatusCode(500, "Deletion failed");
                     }
                 }
